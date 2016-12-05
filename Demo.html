@@ -1,0 +1,70 @@
+<html>
+    <head>
+        <meta charset="utf-8">
+        <title>Temporal AA Demo</title>
+        <style>
+            body {
+                margin: 0;
+                padding: 0;
+            }
+
+            canvas {
+                margin: 0;
+                height: 100vh;
+                width: 100vw;
+            }
+
+            #sidebar {
+                position: fixed;
+                right: 0;
+                top: 0;
+                height: 100vh;
+                width: 100px;
+                background-color: #222;
+                opacity: 0.9;
+                color: white;
+                font-family: Helvetica, Arial, sans-serif;
+                padding: 25px;
+            }
+
+            #sidebar > .button {
+               text-align: center;
+               width: 100%;
+               outline: 2px solid white;
+               margin-bottom: 15px;
+               padding: 5px 0;
+               cursor: pointer;
+            }
+
+            #sidebar > .button.active, #sidebar > .button.active:hover {
+               background-color: #6666ee;
+            }
+
+            #sidebar > .button:hover {
+               background-color: #555;
+            }
+
+        </style>
+    </head>
+    <body>
+        <canvas id="demo-canvas"></canvas>
+        <div id="sidebar"></div>
+
+        <script src="//threejs.org/build/three.min.js"></script>
+        <script src="//threejs.org/examples/js/loaders/OBJLoader.js"></script>
+        <script src="//threejs.org/examples/js/shaders/CopyShader.js"></script>
+        <script src="//threejs.org/examples/js/postprocessing/EffectComposer.js"></script>
+        <script src="//threejs.org/examples/js/postprocessing/ManualMSAARenderPass.js"></script>
+        <script src="//threejs.org/examples/js/postprocessing/RenderPass.js"></script>
+        <script src="//threejs.org/examples/js/postprocessing/MaskPass.js"></script>
+        <script src="//threejs.org/examples/js/postprocessing/ShaderPass.js"></script>
+        <script src="//rawgit.com/mrdoob/stats.js/master/build/stats.min.js"></script>
+
+        <script src="TargetCopier.js"></script>
+        <script src="RenderLoop.js"></script>
+        <script src="MotionVectorRenderer.js"></script>
+        <script src="TaaRenderPass.js"></script>
+        <script src="Demo.js"></script>
+        <script>window.onload = main</script>
+    </body>
+</html>
