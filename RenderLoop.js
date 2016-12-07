@@ -93,7 +93,7 @@ RenderLoop.prototype.setAntialiasingMode = function(mode) {
 
 /**
  * Add a callback to be executed before rendering the frame. Callbacks are run
- * in LIFO order. The callback may be removed by caling remove() on the
+ * in LIFO order. The callback may be removed by caling cancel() on the
  * returned node. Callbacks have a single parameter of the time since the last
  * frame in ms.
  * 
@@ -107,7 +107,7 @@ RenderLoop.prototype.onPreRender = function(callback) {
 
 /**
  * Add a callback to be executed after rendering the frame. Callbacks are run
- * in LIFO order. The callback may be removed by caling remove() on the
+ * in LIFO order. The callback may be removed by caling cancel() on the
  * returned node.
  * 
  * @param callback a no parameter callback
@@ -194,7 +194,7 @@ RenderLoop.prototype._addCallbackNode = function(callback, list) {
 
 
 /**
- * Nuke and rebuild the webgl context and recreate the renderer
+ * Nuke and rebuild the webgl context, recreating the renderer
  * 
  * @param aaMode the antialiasing mode that should be used
  */

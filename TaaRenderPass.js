@@ -16,12 +16,16 @@ function TaaRenderPass(renderLoop) {
     this._vecRenderer = new MotionVectorRenderer(renderLoop);
     this._jitterIndex = 0;
 
-    // Use Halton Sequence [2, 3] for jitter amounts  (Based on UE and
+    // Use Halton Sequence [2, 3] for jitter amounts (Based on UE and
     // Uncharted Presentations)
     this._jitterOffsets = this._generateHaltonJiters(16);
 
+    // Use FP for history buffer and motion map
     let {width, height} = renderLoop.renderer.getSize();
-    this._oldFrameTarget = new THREE.WebGLRenderTarget(width, height);
+    this._scratchBuffer = new THREE.WebGLRenderTarget(width, height, {
+        format: THREE.RGBFormat,
+        type: THREE.FloatType
+    });
     this._vecRenderTarget = new THREE.WebGLRenderTarget(width, height, {
         format: THREE.RGBFormat,
         type: THREE.FloatType
@@ -36,8 +40,10 @@ TaaRenderPass.prototype = Object.create(THREE.Pass.prototype);
  * order to avoid memory leaks
  */
 TaaRenderPass.prototype.dispose = function() {
-    this._oldFrameTarget.dispose();
+    if (this._oldFrameTarget)
+        this._oldFrameTarget.dispose();
     this._reprojectionMaterial.dispose();
+    this._scratchBuffer.dispose();
     this._targetCopier.dispose();
     this._vecRenderer.dispose();
     this._vecRenderTarget.dispose();
@@ -73,40 +79,35 @@ TaaRenderPass.prototype._baseReprojectionMaterial = new THREE.ShaderMaterial({
     varying vec2 Uv;
 
     void main() {
+        vec4 texel = texture2D(tDiffuse, Uv);
         vec4 pixelMovement = texture2D(tMotion, Uv);
-
         vec2 oldPixelUv = Uv - ((pixelMovement.xy * 2.0) - 1.0);
+        vec4 oldTexel = texture2D(tLastFrame, oldPixelUv);
 
         // Use simple neighbor clamping
         vec4 maxNeighbor = vec4(0.0, 0.0, 0.0, 1.0);
         vec4 minNeighbor = vec4(1.0);
+        vec4 average = vec4(0.0);
 
-        for (int x = -1; x < 1; x++) {
-            for (int y = -1; y < 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            for (int y = -1; y <= 1; y++) {
                 vec2 neighborUv = Uv + vec2(float(x) / width, float(y) / height);
                 vec4 neighborTexel = texture2D(tDiffuse, neighborUv);
 
-                maxNeighbor.r = max(maxNeighbor.r, neighborTexel.r);
-                maxNeighbor.g = max(maxNeighbor.g, neighborTexel.g);
-                maxNeighbor.b = max(maxNeighbor.b, neighborTexel.b);
-                
-                minNeighbor.r = min(minNeighbor.r, neighborTexel.r);
-                minNeighbor.g = min(minNeighbor.g, neighborTexel.g);
-                minNeighbor.b = min(minNeighbor.b, neighborTexel.b);
+                maxNeighbor = max(maxNeighbor, neighborTexel);
+                minNeighbor = min(minNeighbor, neighborTexel);
+                average += neighborTexel / 9.0;
             }
         }
 
 
-        vec4 oldTexel = texture2D(tLastFrame, oldPixelUv);
         oldTexel = clamp(oldTexel, minNeighbor, maxNeighbor);
-        vec4 texel = texture2D(tDiffuse, Uv);
 
-        if (oldPixelUv.x < 0.0 || oldPixelUv.x > 1.0 || oldPixelUv.y < 0.0 || oldPixelUv.y > 1.0)
-            oldTexel = texel;
-
-        // This number is pretty much just magic. Adjusting it will change the
-        // balance of sharp and responsive to smooth and blurry
-        vec4 compositeColor = mix(oldTexel, texel, 0.10);
+        // UE Method to get rid of flickering. Weight frame mixing amount
+        // based on local contrast.
+        float contrast = distance(average, texel);
+        float weight = 0.05 * contrast;
+        vec4 compositeColor = mix(oldTexel, texel, weight);
 
         gl_FragColor = opacity * compositeColor;
     }`
@@ -118,24 +119,35 @@ TaaRenderPass.prototype._baseReprojectionMaterial = new THREE.ShaderMaterial({
  * is set.
  */
 TaaRenderPass.prototype.render = function (renderer, writeBuffer, readBuffer) {
+    let {width, height} = renderer.getSize();
     let {scene, camera} = this._renderLoop;
+
+    // Render this a few times if we've just been enabled
+    if (!this._oldFrameTarget) {
+        this._oldFrameTarget = new THREE.WebGLRenderTarget(width, height, {
+            format: THREE.RGBFormat,
+            type: THREE.FloatType
+        });
+        renderer.setClearColor(0x000000);
+        renderer.render(scene, camera, this._oldFrameTarget);
+
+        for (let i = 0; i < this._jitterOffsets.length - 1; i++)
+            this.render(renderer, writeBuffer, readBuffer);
+    }
+
 
     this._vecRenderer.renderMotionMap(1.0 /*colorScale*/, this._vecRenderTarget);
 
     // Apply a jitter to the projection matrix
     let [jitterX, jitterY] = this._jitterOffsets[this._jitterIndex];
-    camera.setViewOffset(readBuffer.width,
-                         readBuffer.height,
-                         jitterX,
-                         jitterY,
-                         readBuffer.width,
-                         readBuffer.height);
+    camera.projectionMatrix.elements[8] = jitterX / width;
+    camera.projectionMatrix.elements[9] = jitterY / height;
 
     // Since this is the first pass we can render to the read buffer and avoid
     // needing to create an extra render target
     renderer.setClearColor(0x000000);
     renderer.render(scene, camera, readBuffer);
-    camera.clearViewOffset();
+    camera.updateProjectionMatrix();
     this._jitterIndex = (this._jitterIndex + 1) % this._jitterOffsets.length;
 
     // Reporoject the frame
@@ -146,16 +158,15 @@ TaaRenderPass.prototype.render = function (renderer, writeBuffer, readBuffer) {
     uniforms.height = {value: readBuffer.height};
     uniforms.width = {value: readBuffer.width};
 
-    this._targetCopier.copy(readBuffer, writeBuffer, this._reprojectionMaterial);
-    this._targetCopier.copy(writeBuffer, this._oldFrameTarget);
-    if (this.renderToScreen)
-        this._targetCopier.copy(writeBuffer, null);
+    this._targetCopier.copy(readBuffer, this._scratchBuffer, this._reprojectionMaterial);
+    this._targetCopier.copy(this._scratchBuffer, this._oldFrameTarget);
+    this._targetCopier.copy(this._oldFrameTarget, this.renderToScreen ? null : writeBuffer);
 }
 
 
 /**
- * Generate jitter amounts based on the Halton Sequence. The sequence is
- * normalized such that it can directly be applied as a pixel offset.
+ * Generate jitter amounts based on the Halton Sequence. Jitters are
+ * normailized to be between -1 and 1
  * 
  * @param length the number of offsets to generate
  */
@@ -163,8 +174,8 @@ TaaRenderPass.prototype._generateHaltonJiters = function(length) {
     let jitters = [];
 
     for (let i = 1; i <= length; i++)
-        jitters.push([this._haltonNumber(2, i) - 0.5, this._haltonNumber(3, i) - 0.5]);
-    
+        jitters.push([(this._haltonNumber(2, i) - 0.5) * 2, (this._haltonNumber(3, i) - 0.5) * 2]);
+
     return jitters;
 }
 

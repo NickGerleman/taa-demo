@@ -1,4 +1,9 @@
 /**
+ * Whether animation is paused
+ */
+let isPaused = true;
+
+/**
  * Start the demo
  */
 function main() {
@@ -15,7 +20,7 @@ function main() {
     bindCameraInput(camera);
 
     for (let i = 0; i < 6; i++) {
-        let light = new THREE.DirectionalLight(0xffffff, 1.0);
+        let light = new THREE.DirectionalLight(0xFFFFFF, 1.0);
         light.position.set(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5);
         scene.add(light);
     }
@@ -89,6 +94,9 @@ function loadSpikesAsync(renderLoop) {
             let moveSign = Math.random() < 0.5 ? -1 : 1;
             let moveFactor = moveSign * (Math.random() *0.8 + 0.2) / 1000;
             renderLoop.onPreRender((timePassed) => {
+                if (isPaused)
+                    return;
+
                 spike.rotateOnAxis(randomAxis, moveFactor * timePassed);
                 spike.translateY((Math.sin((msecs + timePassed) * moveFactor) - Math.sin(msecs * moveFactor)) * 5);
                 spike.translateX((Math.cos((msecs + timePassed) * moveFactor) - Math.cos(msecs * moveFactor)) * 5);
@@ -210,6 +218,9 @@ function cameraControl(camera, ch)
         camera.translateZ(-distance);
         camera.rotateX(ROTATE_INCREMEMENT);
         camera.translateZ(distance);
+        return true;
+    case ' ':
+        isPaused = !isPaused;
         return true;
     }
     return false;

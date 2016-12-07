@@ -11,4 +11,4 @@ The temporal antialiasing solution uses motion vector reprojection and simple 3x
 ##### Resources
 - [TAA in Unreal Engine](https://de45xmedrsdbp.cloudfront.net/Resources/files/TemporalAA_small-59732822.pdf)
 - [TAA in Uncharted 4 (200MB!)](http://advances.realtimerendering.com/s2016/s16_Ke.pptx)
-- [TAA in Assasin's Creed 4](https://bartwronski.com/2014/03/15/temporal-supersampling-and-antialiasing/)
+- [TAA in Assassin's Creed 4](https://bartwronski.com/2014/03/15/temporal-supersampling-and-antialiasing/)
