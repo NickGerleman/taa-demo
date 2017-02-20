@@ -61,9 +61,7 @@ RenderLoop.prototype.setAntialiasingMode = function(mode) {
 
     switch(mode) {
         case AntiAliasingMode.SSAA:
-            // This is named incorrectly and actually does SSAA. Fixed in Three
-            // dev branch. See https://github.com/mrdoob/three.js/issues/10196
-            this._ssaaPass = new THREE.ManualMSAARenderPass(this.scene, this.camera);
+            this._ssaaPass = new THREE.SSAARenderPass(this.scene, this.camera);
             this._ssaaPass.renderToScreen = true;
             this._ssaaPass.sampleLevel = 3; // 8x SSAA
             this._composer.addPass(this._ssaaPass);
